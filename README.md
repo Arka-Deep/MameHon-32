@@ -1,10 +1,13 @@
-# 📚 ManeHon-32 E-Reader
+# 📚 MameHon-32 E-Reader
 
 [![Initial Release](https://img.shields.io/badge/Release-Initial_v1.0-blue.svg)](#)
 [![Platform](https://img.shields.io/badge/Platform-ESP32-lightgrey.svg)](#)
 [![Display](https://img.shields.io/badge/Display-2.9%22_E--Ink-black.svg)](#)
 
 An Open Source E-Reader designed specifically for the [Elecrow CrowPanel ESP32 E-Paper HMI 2.9-inch Display](https://www.elecrow.com/crowpanel-esp32-2-9-e-paper-hmi-display-with-128-296-resolution-black-white-color-driven-by-spi-interface.html), though it can easily be modified for any other setup.
+
+![E-Reader Demo](images/demo.gif)
+
 
 ---
 
@@ -52,6 +55,9 @@ Format your MicroSD card to **FAT32**. You must place the following two files in
 1.  **`book.txt`**: Your reading material. Must be a standard plain text (`.txt`) file.
 2.  **`cover.bin`**: The standby screen cover image.
 
+### 📔 Preparing the Book 
+The project in its current state only accepts plain text in utf-8 , use a tool like [Calibre](https://calibre-ebook.com/) to convert your E-Book library to plaintext. I might write my own EPUB parser later. Save it as **`book.txt`** at the root directory of the SD card
+
 ### 🖼️ Preparing the Cover Image (`cover.bin`)
 To ensure rapid memory loading directly to the e-ink RAM buffer, the image must bypass processing and be formatted strictly as a raw binary file:
 
@@ -64,7 +70,7 @@ To ensure rapid memory loading directly to the e-ink RAM buffer, the image must 
 You can process your image using online converters like [image2cpp](https://javl.github.io/image2cpp/) (Set canvas to 296x128 -> Threshold -> Output as Plain Bytes) and save those bytes as a `.bin` file.
 * *Settings:* `Output type: Binary (*.bin)` | `Scan Mode: Horizontal` | `BitsPixel: Monochrome (1-bit)` | `Max Width/Height: 296 x 128` | Uncheck "Include Head Data".
 
-### 🔤 Changing the Typography
+### 🔤 Changing the Font
 The default firmware utilizes the `Bookerly9pt7b` font (mainly used in Kindles). If you wish to use a different font:
 1.  Navigate to the **[Adafruit GFX Font Converter](https://rop.nl/truetype2gfx/)**.
 2.  Upload your desired `.ttf` file and generate the `.h` file.
@@ -91,3 +97,6 @@ To adapt the code:
 1.  Re-map the `EPD_*` and `SD_*` pin macros to match your dev board.
 2.  Comment out or remove the `SD_PWR` and `EPD_PWR` `digitalWrite()` logic in `setup()` if your board manages peripheral power normally.
 3.  Swap out the `GxEPD2_290_T94_V2` constructor for the specific panel model you are driving.
+
+## 🖨️ 3D Printed Enclosure
+stl files coming soon ...... once i save enough to buy a battery and design a case around it
