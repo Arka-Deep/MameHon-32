@@ -17,7 +17,7 @@
 #define EPD_BUSY  48
 
 //SD card
-#define SD_PWR    41
+#define SD_PWR    42
 #define SD_SCK    39 
 #define SD_MOSI   40 
 #define SD_MISO   13 
@@ -28,6 +28,10 @@
 #define BTN_DOWN  4
 #define BTN_SAVE  5   // New Save / Cover Mode toggle button
 
+
+//SPIClass EPD_SPI(FSPI); // Uses internal hardware SPI2 for E-ink
+SPIClass SD_SPI(HSPI);  // Uses internal hardware SPI3 for SD Card
+
 // Initialize Display
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
@@ -35,7 +39,7 @@ GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(GxEPD2_290_T94_V
 // =========================================================================
 // GLOBAL STATE & REFRESH CONFIGURATION
 // =========================================================================
-int fullRefreshInterval = 7;     // <-- CHANGE THIS to adjust how many pages run on partial refresh
+int fullRefreshInterval = 6;     // <-- CHANGE THIS to adjust how many pages run on partial refresh
 int pagesSinceFullRefresh = 0;    // Counter tracking pages since the last full screen flash
 
 
@@ -56,16 +60,9 @@ const int leftMargin = 10;
 const int rightMargin = 10;
 const int lineSpacing = 6;
 
-// SPI Multiplex Management
-void activateSD() {
-    SPI.end();
-    SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
-}
 
-void activateDisplay() {
-    SPI.end();
-    SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
-}
+
+
 
 // =========================================================================
 // BACKGROUND TEXT SCANNER (For layout calculation)
@@ -115,7 +112,7 @@ uint32_t scanNextPageOffset(File &bookFile, uint32_t startOffset) {
 // TEXT PAGE RENDER ENGINE
 // =========================================================================
 void renderPage(int pageIndex) {
-    activateSD();
+    
     File bookFile = SD.open("/book.txt", FILE_READ);
     if (!bookFile) return;
 
@@ -129,7 +126,7 @@ void renderPage(int pageIndex) {
     display.getTextBounds("A", 0, 0, &bx, &by, &bw, &fontHeight);
     uint16_t spaceWidth = fontHeight / 3;
 
-    activateDisplay();
+    
 
 
     // Determine whether to issue a clean full refresh or a fast partial update
@@ -149,18 +146,18 @@ void renderPage(int pageIndex) {
     display.firstPage();
     do {
         display.fillScreen(GxEPD_WHITE);
-        activateSD();
+        
         bookFile.seek(startOffset); 
-        activateDisplay();
+        
         
         int currentX = leftMargin;
         int currentY = fontHeight + lineSpacing;
         String word = "";
 
-        activateSD();
+        
         while (bookFile.available()) {
             char c = bookFile.read();
-            activateDisplay(); 
+             
             
             if (c == ' ' || c == '\n') {
                 int16_t wx, wy; uint16_t wordWidth, wordHeight;
@@ -171,9 +168,9 @@ void renderPage(int pageIndex) {
                     currentY += fontHeight + lineSpacing;
                 }
                 if (currentY > maxHeight) {
-                    activateSD();
+                    
                     bookFile.seek(bookFile.position() - word.length() - 1);
-                    activateDisplay();
+                    
                     break; 
                 }
 
@@ -190,15 +187,15 @@ void renderPage(int pageIndex) {
             } else {
                 word += c;
             }
-            activateSD(); 
+            
         }
-        activateDisplay(); 
+         
     } while (display.nextPage());
 
-    activateSD();
+    
     nextOffset = bookFile.position();
     bookFile.close();
-    activateDisplay();
+    
 
     if (pageIndex == maxDiscoveredPage) {
         pageOffsets[pageIndex + 1] = nextOffset;
@@ -207,10 +204,10 @@ void renderPage(int pageIndex) {
 }
 
 // =========================================================================
-// LIGHTNING-FAST RAW BINARY (.BIN) LOADER
+// RAW BINARY Image(.BIN) LOADER
 // =========================================================================
 bool loadBINToBuffer(const char* filename) {
-    activateSD();
+    
     File binFile = SD.open(filename, FILE_READ);
     if (!binFile) {
         Serial.println("Error: Missing cover.bin on SD card!");
@@ -242,12 +239,13 @@ bool loadBINToBuffer(const char* filename) {
 // =========================================================================
 void setup() {
     Serial.begin(115200);
-    delay(500);
+    delay(2000);
     Serial.println("\n--- Cold Start: Initializing SD E-Reader ---");
 
     pinMode(BTN_UP, INPUT_PULLUP);
     pinMode(BTN_DOWN, INPUT_PULLUP);
     pinMode(BTN_SAVE, INPUT_PULLUP);
+    
     
     pinMode(SD_PWR, OUTPUT);
     digitalWrite(SD_PWR, HIGH);
@@ -256,11 +254,24 @@ void setup() {
     digitalWrite(EPD_PWR, HIGH);
     delay(150); 
 
-    activateSD();
-    if (!SD.begin(SD_CS)) {
-        Serial.println("SD initialization failed!");
-        return;
+    //Initializing E-Ink Display on its isolated SPI bus
+    SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
+    display.epd2.selectSPI(SPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
+    display.init(0, true, 2, false);
+
+    
+    display.setRotation(1); 
+    display.setTextColor(GxEPD_BLACK);
+
+    //Initializing SD Card on its isolated SPI bus
+    SD_SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+    if (!SD.begin(SD_CS, SD_SPI, 80000000)) { // Mounts SD directly onto SD_SPI at 20MHz
+        Serial.println("SD Card initialization failed!");
+        
+        while(1); // Halt if SD card fails
     }
+
+    Serial.println("System initialized with independent SPI buses.");
 
     // COLD START CHECK: Look for index record file on the SD card
     if (SD.exists("/save.txt")) {
@@ -279,16 +290,14 @@ void setup() {
         Serial.println("No save file detected. Starting at page 0.");
     }
 
-    activateDisplay();
-    display.init(115200);
-    display.setRotation(1); 
-    display.setTextColor(GxEPD_BLACK);
+    
+    
 
     pageOffsets[0] = 0; 
 
     // Rebuild structural offset mapping up to current bookmark index
     if (currentPage > 0) {
-        activateSD();
+        
         File bookFile = SD.open("/book.txt", FILE_READ);
         if (bookFile) {
             for (int i = 0; i < currentPage; i++) {
@@ -321,7 +330,7 @@ void loop() {
                 
 
                 // Save current tracking index string onto SD card storage block
-                activateSD();
+                
                 SD.remove("/save.txt"); // Wipe out the old save record file
                 File saveFile = SD.open("/save.txt", FILE_WRITE);
                 if (saveFile) {
@@ -331,12 +340,11 @@ void loop() {
 
                 // Load image from SD card into RAM buffer space
                 if (loadBINToBuffer("/cover.bin")) {
-                    // Flash the full screen array map onto the display matrix
-                    activateDisplay();
-
+                    
                     // FORCE FULL REFRESH WHEN ENTERING COVER MODE
                     display.setFullWindow();
 
+                    // Flash the full screen array map onto the display matrix
                     display.firstPage();
                     do {
                         display.fillScreen(GxEPD_WHITE);
