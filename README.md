@@ -14,8 +14,13 @@ An Open Source E-Reader designed specifically for the [Elecrow CrowPanel ESP32 E
 ## ✨ Features
 
 * **Auto Resume:** Saves progress to the SD card (`save.txt`) when entering Cover Mode, ensuring you pick up right where you left off on the next boot. The saving is set to manual to minimise wear on the sd card(those are indeed quite expensive right now)
+* **Dark Mode Toggle:** Toggle DarkMode with a single button.
+ ![Dark Mode Demo](images/dark.gif)
 * **Partial Refresh:** Alternates seamlessly between fast partial refreshes and full screen updates to eliminate e-ink ghosting. The interval is easily configurable in the code.
+*  **Orientation Toggle:** 
+  ![Dark Mode Demo](images/orientation.gif)
 * **Cover Lock Mode:** A single button press saves your progress and flashes a custom `.bin` cover image.
+
 
 ---
 
@@ -42,9 +47,11 @@ The CrowPanel features dedicated power control pins for both the E-Paper panel a
 | | SD_MOSI | 40 | HSPI Data Out |
 | | SD_MISO | 13 | HSPI Data In |
 | | SD_CS | 10 | Chip Select |
-| **Controls** | BTN_DOWN | 4 | Next Page (Input Pullup) |
+| **Controls** | BTN_DOWN | 4 | Previous Page (Input Pullup) |
 | | BTN_SAVE | 5 | Save Progress / Toggle Cover Mode (Input Pullup)|
-| | BTN_UP | 6 | Previous Page (Input Pullup) |
+| | BTN_UP | 6 | Next Page (Input Pullup) |
+| | BTN_MENU | 2 | Toggle Landscape and Vertical (Input Pullup) |
+| | BTN_EXIT | 1 | Toggle Dark mode (Input Pullup) |
 
 ---
 
@@ -81,8 +88,10 @@ The default firmware utilizes the `Bookerly9pt7b` font (mainly used in Kindles).
 
 ## 🕹️ Controls & Operation
 
-* **Next Page:** Press the `DOWN` button.
-* **Previous Page:** Press the `UP` button.
+* **Next Page:** Press the `UP` button.
+* **Previous Page:** Press the `DOWN` button.
+* **Toggle Dark Mode:** Press the `EXIT` button.
+* **Toggle Orientation:** Press the `MENU` button.
 * **Toggle Cover Mode:** Press the `SAVE` button. 
     * *Activating* Cover Mode drops a bookmark in `save.txt`, pulls up the cover image, and locks the navigational buttons. **(Safe to power off).**
     * *Deactivating* Cover Mode parses your bookmark, runs a full-screen clear to eliminate artifacting, and renders your current page text. 

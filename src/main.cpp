@@ -4,6 +4,7 @@
 #include <GxEPD2_BW.h>
 #include <Adafruit_GFX.h>
 #include <Bookerly9pt7b.h>
+#include <Bookerly6pt7b.h>
 
 // --- MACROS (From above) ---
 //E-Paper Display
@@ -28,6 +29,13 @@
 #define BTN_DOWN  4
 #define BTN_SAVE  5   // New Save / Cover Mode toggle button
 
+//LED
+#define LED 41
+
+//Menu and Exit buttons
+#define BTN_MENU 2
+#define BTN_EXIT 1
+
 
 //SPIClass EPD_SPI(FSPI); // Uses internal hardware SPI2 for E-ink
 SPIClass SD_SPI(HSPI);  // Uses internal hardware SPI3 for SD Card
@@ -36,37 +44,33 @@ SPIClass SD_SPI(HSPI);  // Uses internal hardware SPI3 for SD Card
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
 
-// =========================================================================
-// GLOBAL STATE & REFRESH CONFIGURATION
-// =========================================================================
-int fullRefreshInterval = 6;     // <-- CHANGE THIS to adjust how many pages run on partial refresh
-int pagesSinceFullRefresh = 0;    // Counter tracking pages since the last full screen flash
+int fullRefreshInterval = 6;     
+int pagesSinceFullRefresh = 0;   
 
 
+bool darkMode = false;
+
+uint16_t BG_COLOR = darkMode ? GxEPD_BLACK : GxEPD_WHITE;
+uint16_t FG_COLOR = darkMode ? GxEPD_WHITE : GxEPD_BLACK;
+
+uint8_t rotationVariable = 1;
 
 
-// Global State Engine
 uint32_t pageOffsets[500]; 
 int currentPage = 0;
 int maxDiscoveredPage = 0;
 bool inCoverMode = false; 
 
-// Allocate a 1-bit RAM graphic canvas buffer for the cover image (296x128 / 8 = 4736 bytes)
+
 uint8_t coverImageBuffer[4736];
 
-// Typographical Configurations
+
 const GFXfont* readerFont = &Bookerly9pt7b;
-const int leftMargin = 10;
-const int rightMargin = 10;
-const int lineSpacing = 6;
+int leftMargin = 8;
+int rightMargin = 6;
+int lineSpacing = 6;
 
 
-
-
-
-// =========================================================================
-// BACKGROUND TEXT SCANNER (For layout calculation)
-// =========================================================================
 uint32_t scanNextPageOffset(File &bookFile, uint32_t startOffset) {
     bookFile.seek(startOffset);
     int maxWidth = display.width() - rightMargin;
@@ -108,9 +112,7 @@ uint32_t scanNextPageOffset(File &bookFile, uint32_t startOffset) {
     return bookFile.position();
 }
 
-// =========================================================================
-// TEXT PAGE RENDER ENGINE
-// =========================================================================
+
 void renderPage(int pageIndex) {
     
     File bookFile = SD.open("/book.txt", FILE_READ);
@@ -121,7 +123,8 @@ void renderPage(int pageIndex) {
     int maxWidth = display.width() - rightMargin;
     int maxHeight = display.height() - 5;
     
-    int16_t bx, by; uint16_t bw, fontHeight;
+    int16_t bx, by;
+    uint16_t bw, fontHeight;
     display.setFont(readerFont);
     display.getTextBounds("A", 0, 0, &bx, &by, &bw, &fontHeight);
     uint16_t spaceWidth = fontHeight / 3;
@@ -145,8 +148,8 @@ void renderPage(int pageIndex) {
 
     display.firstPage();
     do {
-        display.fillScreen(GxEPD_WHITE);
-        
+        display.fillScreen(BG_COLOR);
+        display.setTextColor(FG_COLOR);
         bookFile.seek(startOffset); 
         
         
@@ -203,9 +206,7 @@ void renderPage(int pageIndex) {
     }
 }
 
-// =========================================================================
-// RAW BINARY Image(.BIN) LOADER
-// =========================================================================
+
 bool loadBINToBuffer(const char* filename) {
     
     File binFile = SD.open(filename, FILE_READ);
@@ -214,32 +215,55 @@ bool loadBINToBuffer(const char* filename) {
         return false;
     }
 
-    // A 296x128 1-bit raw array will always be exactly 4736 bytes
+    // A 296x128 1-bit array
     if (binFile.size() != 4736) {
         Serial.println("Error: cover.bin file size is incorrect. Must be 4736 bytes.");
         binFile.close();
         return false;
     }
 
-    // Dump the entire file directly into our 1-bit image buffer in one move
+  
     binFile.read(coverImageBuffer, 4736);
     
-    //inverting the image
-    for (int i = 0; i < 4736; i++) {
-      coverImageBuffer[i] = ~coverImageBuffer[i];
-    }
+
 
 
     binFile.close();
     return true;
 }
 
-// =========================================================================
-// BOOTSTRAP INITIALIZATION (COLD START LOGIC)
-// =========================================================================
+
+void toggleRotation(){
+    rotationVariable=(rotationVariable+1)%2;
+    display.setRotation(rotationVariable);
+
+    if(rotationVariable%2==0){
+        leftMargin = 2;
+        rightMargin = 2;
+        lineSpacing = 4;
+        readerFont = &Bookerly6pt7b;
+    }else{
+        leftMargin = 8;
+        rightMargin = 6;
+        lineSpacing = 6;
+
+        readerFont = &Bookerly9pt7b;
+    }
+    pagesSinceFullRefresh = fullRefreshInterval;
+    renderPage(currentPage);
+
+}
+void toggleDarkMode(){
+    darkMode=!darkMode;  
+    BG_COLOR = darkMode ? GxEPD_BLACK : GxEPD_WHITE;
+    FG_COLOR = darkMode ? GxEPD_WHITE : GxEPD_BLACK;
+
+    renderPage(currentPage);
+}
+
 void setup() {
     Serial.begin(115200);
-    delay(2000);
+    
     Serial.println("\n--- Cold Start: Initializing SD E-Reader ---");
 
     pinMode(BTN_UP, INPUT_PULLUP);
@@ -259,9 +283,8 @@ void setup() {
     display.epd2.selectSPI(SPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
     display.init(0, true, 2, false);
 
+    display.setRotation(1);
     
-    display.setRotation(1); 
-    display.setTextColor(GxEPD_BLACK);
 
     //Initializing SD Card on its isolated SPI bus
     SD_SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
@@ -283,7 +306,8 @@ void setup() {
             }
             currentPage = storedVal.toInt();
             saveFile.close();
-            Serial.print("Resuming from SD Bookmark: Page "); Serial.println(currentPage);
+            Serial.print("Resuming from SD Bookmark: Page ");
+            Serial.println(currentPage);
         }
     } else {
         currentPage = 0;
@@ -308,18 +332,13 @@ void setup() {
         }
     }
 
-    // Force a crisp full flash on initial bootup to ensure memory is clear
     pagesSinceFullRefresh = fullRefreshInterval;
-
-    // Render text to start reading immediately on boot
     renderPage(currentPage);
 }
 
-// =========================================================================
-// RUNTIME NAVIGATIONAL CONTROLS
-// =========================================================================
+
 void loop() {
-    // 1. ACTION: SAVE & TOGGLE COVER SCREEN LOCK MODE
+    // SAVE & TOGGLE COVER SCREEN LOCK MODE
     if (digitalRead(BTN_SAVE) == LOW) {
         delay(50); // Debounce
         if (digitalRead(BTN_SAVE) == LOW) {
@@ -347,8 +366,8 @@ void loop() {
                     // Flash the full screen array map onto the display matrix
                     display.firstPage();
                     do {
-                        display.fillScreen(GxEPD_WHITE);
-                        display.drawBitmap(0, 0, coverImageBuffer, 296, 128, GxEPD_BLACK);
+                        display.fillScreen(GxEPD_BLACK);
+                        display.drawBitmap(0, 0, coverImageBuffer, 296, 128, GxEPD_WHITE);
                     } while (display.nextPage());
                     
                     inCoverMode = true;
@@ -368,28 +387,47 @@ void loop() {
         }
     }
 
-    // Navigational directional steps are ONLY permitted while Cover Screen is inactive
+    
     if (!inCoverMode) {
-        // 2. ACTION: NEXT PAGE
-        if (digitalRead(BTN_DOWN) == LOW) {
-            delay(50); 
-            if (digitalRead(BTN_DOWN) == LOW) {
-                currentPage++;
-                renderPage(currentPage);
-                while (digitalRead(BTN_DOWN) == LOW); 
-            }
-        }
-
-        // 3. ACTION: PREVIOUS PAGE
+        
         if (digitalRead(BTN_UP) == LOW) {
             delay(50); 
             if (digitalRead(BTN_UP) == LOW) {
+                currentPage++;
+                renderPage(currentPage);
+                while (digitalRead(BTN_UP) == LOW); 
+            }
+        }
+
+        
+        if (digitalRead(BTN_DOWN) == LOW) {
+            delay(50); 
+            if (digitalRead(BTN_DOWN) == LOW) {
                 if (currentPage > 0) {
                     currentPage--;
                     renderPage(currentPage);
                 }
-                while (digitalRead(BTN_UP) == LOW); 
+                while (digitalRead(BTN_DOWN) == LOW); 
             }
+        }
+
+        if(digitalRead(BTN_EXIT)==LOW){
+            delay(50);
+            if(digitalRead(BTN_EXIT)==LOW){
+                
+                toggleDarkMode();
+                
+            }
+            while(digitalRead(BTN_EXIT)==LOW);
+        }
+        if(digitalRead(BTN_MENU)==LOW){
+            delay(50);
+            if(digitalRead(BTN_MENU)==LOW){
+                
+                
+                toggleRotation();
+            }
+            while(digitalRead(BTN_MENU)==LOW);
         }
     }
 }
