@@ -17,7 +17,7 @@ An Open Source E-Reader designed specifically for the [Elecrow CrowPanel ESP32 E
 * **Dark Mode Toggle:** Toggle DarkMode with a single button.
  ![Dark Mode Demo](images/dark.gif)
 * **Partial Refresh:** Alternates seamlessly between fast partial refreshes and full screen updates to eliminate e-ink ghosting. The interval is easily configurable in the code.
-*  **Orientation Toggle:** 
+*  **Orientation Toggle:** Change To Landscape Or Vertical. Currently it only switches between two sides , for full rotation change ` %2 ` into ` %4 `
   ![Dark Mode Demo](images/orientation.gif)
 * **Cover Lock Mode:** A single button press saves your progress and flashes a custom `.bin` cover image.
 
